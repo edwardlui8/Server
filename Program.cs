@@ -15,58 +15,65 @@ namespace Server
         {
             try
             {
-                IPAddress ipAd = IPAddress.Parse("192.168.1.46");
-
-                TcpListener tcpListener = new TcpListener(ipAd, 8001);
-
+                TcpListener tcpListener = new TcpListener(IPAddress.Parse("192.168.1.46"), 8001);
                 tcpListener.Start();
 
-                Console.WriteLine("The server is running at port 8001...");
-                Console.WriteLine("The local End point is  :" +
-                                  tcpListener.LocalEndpoint);
-                Console.WriteLine("Waiting for a connection.....");
+                Console.WriteLine("Server running on: " + tcpListener.LocalEndpoint);
+                Console.WriteLine("Waiting for a connection...");
 
                 tcpClient = tcpListener.AcceptTcpClient();
 
+                Console.WriteLine("Accepted connection from: " + tcpClient.Client.RemoteEndPoint);
+
                 ReceiveData();
+
                 tcpClient.Close();
                 tcpListener.Stop();
             }
             catch (Exception e)
             {
-                Console.WriteLine("Error..... " + e.StackTrace);
+                Console.WriteLine("Error: " + e.StackTrace);
             }
 
             Console.ReadKey();
         }
 
-        private async static void ReceiveData()
+        private static void ReceiveData()
         {
 
-            NetworkStream networkStream = null;
-
-            networkStream = tcpClient.GetStream();
-            ASCIIEncoding asen = new ASCIIEncoding();
+            NetworkStream networkStream = tcpClient.GetStream();
 
             byte[] data = new byte[tcpClient.ReceiveBufferSize];
+            Console.WriteLine("\nReceive buffer size {0}", data.Length);
+
             MemoryStream memoryStream = new MemoryStream();
             do
             {
-                networkStream.Read(data, 0, data.Length);
-                memoryStream.Write(data, 0, data.Length);
+                int bytesRead = networkStream.Read(data, 0, data.Length);
+                memoryStream.Write(data, 0, bytesRead);
+                Console.WriteLine("\nBytes read {0}", bytesRead);
             } while (networkStream.DataAvailable);
 
-            Console.WriteLine("\nFinished Writing");
-            //networkStream.Read(data, 0, tcpClient.ReceiveBufferSize);
+            Console.WriteLine("\nTotal bytes read {0}", memoryStream.Length);
 
-            string fileName = @"C:\Users\Edward\Desktop\alfie2.jpg";
-            File.WriteAllBytes(fileName, memoryStream.ToArray());
+            // Combined bytes
+            byte[] combinedBytes = memoryStream.ToArray();
 
-            byte[] response = asen.GetBytes("Hello client"); ;
-            networkStream.Write(response, 0, response.Length);
+            // Filename length
+            int fileNameLength = combinedBytes[0];
 
-            //s.Send(asen.GetBytes("The string was recieved by the server."));
-            Console.WriteLine("\nSent Acknowledgement");
+            // Filename
+            string fileName = Encoding.ASCII.GetString(combinedBytes, 1, fileNameLength);
+            Console.WriteLine("\nFile name {0}", fileName);
+
+            // File
+            int fileSize = combinedBytes.Length - 1 - fileNameLength;
+            byte[] fileBytes = new byte[fileSize];
+            Buffer.BlockCopy(combinedBytes, fileNameLength + 1, fileBytes, 0, fileSize);
+            Console.WriteLine("\nFile size {0}", fileBytes.Length);
+
+            string filePath = @"C:\Users\Edward\Desktop\server\" + fileName;
+            File.WriteAllBytes(filePath, fileBytes);
 
             networkStream.Close();
         }
